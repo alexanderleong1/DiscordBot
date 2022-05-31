@@ -3,7 +3,8 @@ import os
 from discord.ext import commands
 from discord.ui import Button, View
 # from discord_ui import Button, UI, Interaction, LinkButton, Components
-# from discord_components import DiscordComponents, ComponentsBot, Button
+# from discord_components import DiscordComponents
+# from discord_components import DiscordComponents, ComponentsBot
 import random
 import asyncio
 from monster import *
@@ -23,6 +24,7 @@ os.system("python monster.py")
 intents = discord.Intents.default()
 intents.message_content = True
 client = commands.Bot(command_prefix=".", intents=intents)
+# DiscordComponents(client)
 
 # client = ComponentsBot(command_prefix = ".")
 # database containing all stored character information
@@ -133,7 +135,7 @@ to create a proper response.
 
 
 class UIButton(Button):
-    def __init__(self, label, custom_id, style, ctx, view):
+    def __init__(self, label, custom_id, style, ctx):
         super().__init__(label=label, custom_id=custom_id, style=style)
         self.ctx = ctx
 
@@ -145,65 +147,67 @@ class UIButton(Button):
             await interaction.delete_original_message()
             # await interaction.response.edit_message(embed=discord.Embed(description="You walk forward...",
             #                                                             color=0x27E8D1), view=self.view)
-            await walk(self.ctx)
+            str_rep = await walk(self.ctx, False)
+
         elif self.custom_id == 'stats':
             # await interaction.response.edit_message(embed=discord.Embed(description="Stats",
             #                                                             color=0x27E8D1), view=self.view)
             await interaction.response.defer()
             await interaction.delete_original_message()
-            await stats(self.ctx)
-            await display_default_ui(self.ctx)
+            str_rep = await stats(self.ctx, False)
+            await display_default_ui(self.ctx, str_rep)
         elif self.custom_id == 'inventory':
             # await interaction.response.edit_message(embed=discord.Embed(description="Inventory",
             #                                                             color=0x27E8D1), view=self.view)
             await interaction.response.defer()
             await interaction.delete_original_message()
-            await inventory(self.ctx)
-            await display_default_ui(self.ctx)
+            str_rep = await inventory(self.ctx, False)
+            await display_default_ui(self.ctx, str_rep)
         elif self.custom_id == 'shop':
             # await interaction.response.edit_message(embed=discord.Embed(description="General Shop",
             #                                                             color=0x27E8D1), view=self.view)
             await interaction.response.defer()
             await interaction.delete_original_message()
-            await shop(self.ctx)
-            await display_default_ui(self.ctx)
+            str_rep = await shop(self.ctx, False)
+            await display_default_ui(self.ctx, str_rep)
         elif self.custom_id == 'location':
             # await interaction.response.edit_message(embed=discord.Embed(description="Location",
             #                                                             color=0x27E8D1), view=self.view)
             await interaction.response.defer()
             await interaction.delete_original_message()
-            await location(self.ctx)
-            await display_default_ui(self.ctx)
+            str_rep = await location(self.ctx, False)
+            await display_default_ui(self.ctx, str_rep)
         elif self.custom_id == 'attack':
             # await interaction.response.edit_message(embed=discord.Embed(description="Attack",
             #                                                             color=0x27E8D1), view=self.view)
             await interaction.response.defer()
             await interaction.delete_original_message()
-            await attack(self.ctx)
+            str_rep = await attack(self.ctx, False)
         elif self.custom_id == 'flee':
             await interaction.response.defer()
             await interaction.delete_original_message()
-            await flee(self.ctx)
+            str_rep = await flee(self.ctx, False)
+            await display_default_ui(self.ctx, str_rep)
 
 
 """Displays the default UI.
 
 Choices for walking, opening shop, checking inventory, changing locations
 """
-async def display_default_ui(ctx):
+async def display_default_ui(ctx, content=""):
     view = View()
 
-    walk_button = UIButton(label="Walk", custom_id='walk', style=discord.ButtonStyle.green, ctx=ctx, view=view)
-    stats_button = UIButton(label="Stats", custom_id='stats', style=discord.ButtonStyle.blurple, ctx=ctx, view=view)
+    walk_button = UIButton(label="Walk", custom_id='walk', style=discord.ButtonStyle.green, ctx=ctx)
+    stats_button = UIButton(label="Stats", custom_id='stats', style=discord.ButtonStyle.blurple, ctx=ctx)
     shop_button = UIButton(label="Inventory", custom_id='inventory', style=discord.ButtonStyle.blurple, ctx=ctx,
-                           view=view)
-    inventory_button = UIButton(label="Shop", custom_id='shop', style=discord.ButtonStyle.blurple, ctx=ctx, view=view)
+                           )
+    inventory_button = UIButton(label="Shop", custom_id='shop', style=discord.ButtonStyle.blurple, ctx=ctx)
     location_button = UIButton(label="Move Locations", custom_id='location', style=discord.ButtonStyle.blurple, ctx=ctx,
-                               view=view)
+                               )
 
     await initialize_buttons(view, [
         walk_button, stats_button, shop_button, inventory_button, location_button
-    ],ctx)
+    ],ctx,content)
 
     # await ctx.message.delete()
 
@@ -212,19 +216,19 @@ async def display_default_ui(ctx):
 
 Includes choices for attack, special attack, inventory, and flee.
 """
-async def display_combat_ui(ctx):
+async def display_combat_ui(ctx, content=""):
     view = View()
 
-    attack_button = UIButton(label="Attack", custom_id='attack', style=discord.ButtonStyle.green, ctx=ctx, view=view)
+    attack_button = UIButton(label="Attack", custom_id='attack', style=discord.ButtonStyle.green, ctx=ctx)
     s_attack_button = UIButton(label="Special Attack", custom_id='s_attack', style=discord.ButtonStyle.blurple, ctx=ctx,
-                               view=view)
+                              )
     inventory_button = UIButton(label="Inventory", custom_id='inventory', style=discord.ButtonStyle.blurple, ctx=ctx,
-                                view=view)
-    flee_button = UIButton(label="Flee", custom_id='flee', style=discord.ButtonStyle.red, ctx=ctx, view=view)
+                                )
+    flee_button = UIButton(label="Flee", custom_id='flee', style=discord.ButtonStyle.red, ctx=ctx)
 
     await initialize_buttons(view, [
         attack_button, s_attack_button, inventory_button, flee_button
-    ], ctx)
+    ], ctx, content)
 
 
 """Initializes the buttons in button_list for the user interface.
@@ -243,9 +247,12 @@ async def initialize_buttons(view, button_list, ctx, content=""):
 Routes to the default, general merchant shop.
 """
 @client.command()
-async def shop(ctx):
-    await ctx.send(embed=discord.Embed(description="Your shop looks pretty empty..", color=0x27E8D1))
-
+async def shop(ctx, is_sender=True):
+    if is_sender:
+        await ctx.send(discord.Embed(description=">>> Your shop looks pretty empty..", color=0x27E8D1))
+    else:
+        return ">>> Your shop looks pretty empty.."
+        # return send_message(ctx, "Your shop looks pretty empty..")
 
 """Developer tool to debug features.
 
@@ -267,28 +274,23 @@ async def set(ctx):
 There are different stages to each biome. The higher the stage number, the more difficult the monsters will be.
 """
 @client.command()
-async def location(ctx):
-    await ctx.send(embed=discord.Embed(description="You are currently located at " + str(char_db.find_one({'_id': ctx.author.id})['location']),color=0x27E8D1))
-
+async def location(ctx, is_sender=True):
+    if is_sender:
+        await ctx.send(discord.Embed(description=">>> You are currently located at " + str(char_db.find_one({'_id': ctx.author.id})['location']),color=0x27E8D1))
+    else:
+        return ">>> You are currently located at" + str(char_db.find_one({'_id': ctx.author.id})['location'])
 
 """Displays a stats help page that gives a rundown on how all the stats work.
 
 Each stat affects one part of gameplay or combat. The player will gain damage based on their stat distributions.
 """
 @client.command()
-async def stats_help(ctx):
-    await ctx.send(embed=discord.Embed(description="__**Stats Tutorial**__\n" +
-                       "Welcome to the stats tutorial! Here's a quick rundown on how the stats work:\n" +
-                       "**HP** determines the amount of damage you can take before losing a combat. This can be reset using potions or food. Players will additionally regain HP periodically.\n" +
-                       "**MP** dictates the amount of times you can use your special ability. Each cast of your special ability will cost some MP.\n" +
-                       "**Strength** affects the amount of damage you deal with melee weapons.\n" +
-                       "**Vitality** adds a small amount to your HP and increases all resistances.\n" +
-                       "**Dexterity** determines your critical strike chance and critical strike damage. Additionally increases weapon damage for certain weapon types.\n" +
-                       "**Intelligence** increases damage dealt by special abilities.\n" +
-                       "**Agility** affects the turn order for combat. Having a higher agility ensures that a player will go first. If a player's agility is high enough, they can take multiple turns before their opponent.\n" +
-                       "**Luck** increases drop rates for all items and increases rates for rare encounters.\n" +
-                       "Players can allocate 3 stat points (SP) every level. Special items must be used to reset allocated SP.",color=0x27E8D1))
-
+async def stats_help(ctx, is_sender=True):
+    stats_help_text = "__**Stats Help Tutorial**__"
+    if is_sender:
+        await ctx.send(discord.Embed(description=stats_help_text,color=0x27E8D1))
+    else:
+        return stats_help_text
 
 """Moves the player around in their current location. 
 
@@ -298,18 +300,18 @@ When a player moves throughout their location, they will have random encounters.
     Finding gold on the floor
     NPC encounters
 """
-
-
 @client.command()
-async def walk(ctx):
+async def walk(ctx, is_sender=True):
     author = ctx.author
     # The current character is the author of the message.
     character = char_db.find_one({'_id': author.id})
 
     # If the user is currently in combat, then print error message and return.
     if character['in_combat']:
-        await ctx.send(embed=discord.Embed(description="You are already in combat!",color=0x27E8D1))
-
+        if is_sender:
+            await ctx.send(discord.Embed(description=">>> You are already in combat!",color=0x27E8D1))
+        else:
+            return ">>> You are already in combat!"
     choice = random.randint(0, 1000)
     if choice < 30:  # Finding money, 3% chance
         # Amount of money found = random_int(character_level / 2 + (1.35 * character_luck), character_level + (1.35 * character_luck))
@@ -317,8 +319,11 @@ async def walk(ctx):
         char_level = char_stats['level']
         char_luck = char_stats['luck']
         amount_found = random.randrange(int(char_level / 2 + 1.35 * char_luck), int(char_level + 1.35 * char_luck), 1)
-        await ctx.send(embed=discord.Embed(description="You found {} gold on the ground.".format(amount_found),color=0x27E8D1))
         await add_gold(amount_found)
+        if is_sender:
+            await ctx.send(discord.Embed(description=">>> You found {} gold on the ground.".format(amount_found),color=0x27E8D1))
+        else:
+            return ">>> You found {} gold on the ground.".format(amount_found)
 
     elif choice < 40:  # Tripping and taking x damage, 1% chance
         # Amount of damage taken = random_int(character_level * 2 + (0.85 * character_defense), character_level * 2 + (0.85 * character_defense))
@@ -328,10 +333,13 @@ async def walk(ctx):
         damage_taken = random.randrange(int(char_level * 1.1 - (0.85 * char_vitality)),
                                         int(char_level * 1.5 + (0.85 * char_vitality)))
         new_hp = character['hp'] - damage_taken
-        await ctx.send(embed=discord.Embed(description="You slipped on a stray banana peel and took {} damage. You now have {} HP.".format(
-            damage_taken, new_hp),color=0x27E8D1))
         char_db.update_one({'_id': author.id},
                            {"$set": {'hp': new_hp}})
+        if is_sender:
+            await ctx.send(discord.Embed(description=">>> You slipped on a stray banana peel and took {} damage. You now have {} HP.".format(
+            damage_taken, new_hp),color=0x27E8D1))
+        else:
+            return ">>> You slipped on a stray banana peel and took {} damage. You now have {} HP.".format(damage_taken, new_hp)
 
     elif choice >= 40:  # Monster encounter, 90% chance
         # Update the in_combat status of the user.
@@ -351,21 +359,26 @@ the user deals damage to their opponent based on current stats and equipment.
 
 
 @client.command()
-async def attack(ctx):
+async def attack(ctx, is_sender=True):
     author = ctx.author
     character = char_db.find_one({'_id': author.id})
 
     # Check if the character is in combat. If they are not in combat, then display an error message and return.
     if character['in_combat'] is False:
-        await ctx.send(embed=discord.Embed(description="You are not in combat.",color=0x27E8D1))
+        if is_sender:
+            await ctx.send(discord.Embed(description=">>> You are not in combat.",color=0x27E8D1))
+        else:
+            return ">>> You are not in combat."
 
     # Check if there is a mapping in the dictionary. Error happens when program is restarted and in_combat is not reset.
     try:
         if enemies[author.id] is None:
             char_db.update_one({'_id': author.id},
                                {'$set': {'in_combat': False}})
-            await ctx.send(embed=discord.Embed(description="You are not in combat.",color=0x27E8D1))
-
+            if is_sender:
+                await ctx.send(discord.Embed(description=">>> You are not in combat.",color=0x27E8D1))
+            else:
+                return ">>> You are not in combat."
     except Exception:
         pass
 
@@ -381,8 +394,12 @@ async def attack(ctx):
         damage_dealt = int((1.5 + char_dex / 100) * (random.randint(int(char_str), int(char_str * 1.1))))
         enemies[author.id].take_damage(damage_dealt)
         enemy_hp_left = enemies[author.id].get_hp() if enemies[author.id].get_hp() >= 0 else 0
-        await ctx.send(embed=discord.Embed(description="\U0001F4A5You landed a critical strike for {} damage.\U0001F4A5\nThe {} has {} \u2764\uFE0F left.".format(
+        if is_sender:
+            await ctx.send(discord.Embed(description=">>> \U0001F4A5You landed a critical strike for {} damage.\U0001F4A5\nThe {} has {} \u2764\uFE0F left.".format(
                                damage_dealt, enemies[author.id], enemy_hp_left),color=0x27E8D1))
+        else:
+            return ">>> \U0001F4A5You landed a critical strike for {} damage.\U0001F4A5\nThe {} has {} \u2764\uFE0F left.".format(
+                               damage_dealt, enemies[author.id], enemy_hp_left)
         if enemy_hp_left <= 0:
             await despawn(ctx)
         else:
@@ -391,8 +408,12 @@ async def attack(ctx):
         damage_dealt = random.randint(int(char_str), int(char_str * 1.1))
         enemies[author.id].take_damage(damage_dealt)
         enemy_hp_left = enemies[author.id].get_hp() if enemies[author.id].get_hp() >= 0 else 0
-        await ctx.send(embed=discord.Embed(description="\N{crossed swords}You attacked the {} for {} damage.\N{crossed swords}\nThe {} has {} \u2764\uFE0F left.".format(
+        if is_sender:
+            await ctx.send(discord.Embed(description=">>> \N{crossed swords}You attacked the {} for {} damage.\N{crossed swords}\nThe {} has {} \u2764\uFE0F left.".format(
                                enemies[author.id], damage_dealt, enemies[author.id], enemy_hp_left),color=0x27E8D1))
+        else:
+            return ">>> \N{crossed swords}You attacked the {} for {} damage.\N{crossed swords}\nThe {} has {} \u2764\uFE0F left.".format(
+                               enemies[author.id], damage_dealt, enemies[author.id], enemy_hp_left)
         if enemy_hp_left <= 0:
             await despawn(ctx)
         else:
@@ -403,12 +424,14 @@ async def attack(ctx):
 """Allows the player to flee from combat
 """
 @client.command()
-async def flee(ctx):
+async def flee(ctx, is_sender=True):
     author = ctx.author
     # Check if the player is in combat
     if char_db.find_one({'_id': author.id})['in_combat'] is False:
-        await ctx.send(embed=discord.Embed(description="You are not in combat.",color=0x27E8D1))
-
+        if is_sender:
+            await ctx.send(discord.Embed(description=">>> You are not in combat.",color=0x27E8D1))
+        else:
+            return ">>> You are not in combat."
     # Set the players in_combat status to false.
     char_db.update_one({'_id': author.id},
                        {'$set': {'in_combat': False}})
@@ -417,8 +440,10 @@ async def flee(ctx):
     if enemies.get(author.id) is not None:
         enemies.pop(author.id)
 
-    await ctx.send(embed=discord.Embed(description="You fled from combat!",color=0x27E8D1))
-    await display_default_ui(ctx)
+    if is_sender:
+        await ctx.send(discord.Embed(description=">>> You fled from combat!",color=0x27E8D1))
+    else:
+        return ">>> You fled from combat!"
 
 """Used to despawn a Monster instance that is associated with a user.
 
@@ -472,10 +497,12 @@ async def add_exp(ctx, amount):
         char_db.update_one({'_id': author.id},
                            {'$set': {'exp': new_curr_exp, 'max_exp': new_max_exp, 'stats.level': new_level,
                                      'stats.hp': new_max_hp, 'hp': new_max_hp}})
-        await ctx.send(embed=discord.Embed(description="Leveled up to {}! Max HP increased to {}.".format(character['stats']['level'],
+
+        await ctx.send(discord.Embed(description="Leveled up to {}! Max HP increased to {}.".format(character['stats']['level'],
                                                                                    char_db.find_one({'_id': author.id})[
                                                                                        'stats']['hp']),color=0x27E8D1))
-    await ctx.send(embed=discord.Embed(description="You have defeated {}! Earned {} EXP ({} / {})".format(enemies[author.id], amount,
+
+    await ctx.send(discord.Embed(description="You have defeated {}! Earned {} EXP ({} / {})".format(enemies[author.id], amount,
                                                                                    char_db.find_one({'_id': author.id})[
                                                                                        'exp'],
                                                                                    char_db.find_one({'_id': author.id})[
@@ -541,11 +568,15 @@ Searches for character based on primary key id. Creates a string representation 
 
 
 @client.command()
-async def inventory(ctx):
+async def inventory(ctx, is_sender=True):
     author = ctx.author
     char_inv = char_db.find_one({'_id': author.id})['inventory']
-    await ctx.send(embed=discord.Embed(description="__**{}'s inventory**__\n\nGold: {}\nEquipment: {}\nFood: {}"
+    if is_sender:
+        await ctx.send(discord.Embed(description=">>> __**{}'s inventory**__\n\nGold: {}\nEquipment: {}\nFood: {}"
                        .format(author, char_inv['gold'], char_inv['equipment'], char_inv['food']),color=0x27E8D1))
+    else:
+        return ">>> __**{}'s inventory**__\n\nGold: {}\nEquipment: {}\nFood: {}"\
+            .format(author, char_inv['gold'], char_inv['equipment'], char_inv['food'])
 
 
 """Spawns a Monster during a combat encounter.
@@ -553,9 +584,7 @@ async def inventory(ctx):
 Generates a random Monster to spawn based on the location of the user. Each Monster has a different variation that 
 changes their stats and item drops.
 """
-
-
-async def spawn(ctx):
+async def spawn(ctx, is_sender=True):
     author = ctx.author
     character = char_db.find_one({'_id': author.id})
     location = character['location']
@@ -569,9 +598,15 @@ async def spawn(ctx):
     """
     if location == "forest_1":
         monster = Slime()
-        await ctx.send(embed=discord.Embed(description=monster.interaction() + '\n' + monster.stats(), color=0x27E8D1))
         enemies[author.id] = monster
-        await display_combat_ui(ctx)
+        if is_sender:
+            await ctx.send(discord.Embed(description=monster.interaction() + '\n' + monster.stats(), color=0x27E8D1))
+            await display_combat_ui(ctx)
+        else:
+            try:
+                return str(monster.interaction() + '\n' + monster.stats())
+            finally:
+                await display_combat_ui(ctx)
 
     # elif location is "forest_2":
 
@@ -583,14 +618,20 @@ all of the default values using a pre-defined template. Will send a message indi
 """
 
 
-async def create(ctx):
+async def create(ctx, is_sender=True):
     author = ctx.author
     if char_db.find_one({'_id': author.id}) is None:
         Character(author.id, author)
-        await ctx.send(embed=discord.Embed(description="New character created!",color=0x27E8D1))
+        if is_sender:
+            await ctx.send(discord.Embed(description=">>> New character created!",color=0x27E8D1))
+        else:
+            return ">>> New character created!"
 
     else:
-        await ctx.send(embed=discord.Embed(description="You've already created a character!",color=0x27E8D1))
+        if is_sender:
+            await ctx.send(discord.Embed(description=">>> You've already created a character!",color=0x27E8D1))
+        else:
+            return ">>> You've already created a character!"
 
 
 """Prints character stats.
@@ -600,11 +641,12 @@ Accesses the stats Object from the character database. Called by the .stats keyw
 
 
 @client.command()
-async def stats(ctx):
+async def stats(ctx, is_sender=True):
     author = ctx.author
     char_info = char_db.find_one({'_id': author.id})
     char_stats = char_info['stats']
-    await ctx.send(embed=discord.Embed(description="__**Displaying {}'s stats:**__ \nLevel {} ({} EXP / {} EXP) \n\u2764\uFE0F HP:  {} / {}\n\U0001F535 MP: {} / {} \n\N{flexed biceps} STR:  {} \n\N{adhesive bandage} VIT:   {}\n\U0001F3AF DEX: {} \n\N{scroll} INT:   {} \n\U0001F45F AGL: {}\n\N{sparkles} LUK:  {}"
+    if is_sender:
+        await ctx.send(discord.Embed(description=">>> __**Displaying {}'s stats:**__ \nLevel {} ({} EXP / {} EXP) \n\u2764\uFE0F HP:  {} / {}\n\U0001F535 MP: {} / {} \n\N{flexed biceps} STR:  {} \n\N{adhesive bandage} VIT:   {}\n\U0001F3AF DEX: {} \n\N{scroll} INT:   {} \n\U0001F45F AGL: {}\n\N{sparkles} LUK:  {}"
                        .format(author, char_stats['level'], char_db.find_one({'_id': author.id})['exp'],
                                char_db.find_one({'_id': author.id})['max_exp'],
                                char_info['hp'], char_stats['hp'], char_info['mp'], char_stats['mp'],
@@ -612,6 +654,15 @@ async def stats(ctx):
                                char_stats['vitality'], char_stats['dexterity'], char_stats['intelligence'],
                                char_stats['agility'],
                                char_stats['luck']),color=0x27E8D1))
+    else:
+        return ">>> __**Displaying {}'s stats:**__ \nLevel {} ({} EXP / {} EXP) \n\u2764\uFE0F HP:  {} / {}\n\U0001F535 MP: {} / {} \n\N{flexed biceps} STR:  {} \n\N{adhesive bandage} VIT:   {}\n\U0001F3AF DEX: {} \n\N{scroll} INT:   {} \n\U0001F45F AGL: {}\n\N{sparkles} LUK:  {}"\
+            .format(author, char_stats['level'], char_db.find_one({'_id': author.id})['exp'],
+                               char_db.find_one({'_id': author.id})['max_exp'],
+                               char_info['hp'], char_stats['hp'], char_info['mp'], char_stats['mp'],
+                               char_stats['strength'],
+                               char_stats['vitality'], char_stats['dexterity'], char_stats['intelligence'],
+                               char_stats['agility'],
+                               char_stats['luck'])
 
 
 # """Sends a text representation of the stats with verbal descriptions rather than emoticons.
@@ -633,8 +684,9 @@ the text channel.
 
 
 @client.command()
-async def tutorial(ctx):
-    await ctx.send(embed=discord.Embed(description="__**Getting Started**__\n" +
+async def tutorial(ctx, is_sender=True):
+    if is_sender:
+        await ctx.send(discord.Embed(description="__**Getting Started**__\n" +
                        ".create: Creates a new character\n" +
                        ".stats: View your character stats\n" +
                        ".inv: View your inventory \n" +
@@ -643,6 +695,15 @@ async def tutorial(ctx):
                        ".w: Walk forward\n" +
                        ".a: Attack opponent (only available during combat)\n",
                        color=0x27E8D1))
+    else:
+        return (">>> __**Getting Started**__\n" +
+        ".create: Creates a new character\n" +
+        ".stats: View your character stats\n" +
+        ".inv: View your inventory \n" +
+        ".statshelp: Character stats tutorial" +
+        "\n\n__**Gameplay**__\n" +
+        ".w: Walk forward\n" +\
+        ".a: Attack opponent (only available during combat)\n")
 
 
 """Displays bot statistics.
@@ -652,9 +713,13 @@ Includes number of total players and the number of servers the bot is in.
 
 
 @client.command()
-async def bot_info(ctx):
-    await ctx.send(embed=discord.Embed(description="There are {players} players across {servers} servers!".format(
+async def bot_info(ctx, is_sender=True):
+    if is_sender:
+        await ctx.send(discord.Embed(description=">>> There are {players} players across {servers} servers!".format(
         players=char_db.count_documents({}), servers=str(len(client.guilds))),color=0x27E8D1))
+    else:
+        return ">>> There are {players} players across {servers} servers!".format(
+        players=char_db.count_documents({}), servers=str(len(client.guilds)))
 
 
 """Displays leaderboard rankings for a specific statistic.
@@ -666,13 +731,14 @@ Args:
 
 @client.command()
 async def leaderboard(ctx, statistic):
-    await ctx.send(embed=discord.Embed(description="__**{} Leaderboard**__".format(statistic.capitalize()),color=0x27E8D1))
+    await ctx.send(discord.Embed(description="__**{} Leaderboard**__".format(statistic.capitalize()),color=0x27E8D1))
     total_players = char_db.count_documents({})
     max_lb = total_players if total_players < 20 else 20
+    list = []
     if statistic == 'level':
         top_players = char_db.find().sort('stats.level', -1)
         for x in range(0, max_lb):
-            await ctx.send(embed=discord.Embed(description=str((x + 1)) + ". " + top_players[x]['discord_name'] + " (Lv. {})".format(
+             await ctx.send(discord.Embed(description=str((x + 1)) + ". " + top_players[x]['discord_name'] + " (Lv. {})".format(
                 top_players[x]['stats']['level']),color=0x27E8D1))
 
 
@@ -694,12 +760,19 @@ Typical usage example:
         end_message(author.id)
 """
 async def send_message(ctx, message_content):
-    embedVar = discord.Embed(description=message_content, color=0x27E8D1)
-    await ctx.send(embed=embedVar)
+    return discord.Embed(description=message_content, color=0x27E8D1)
+
+    # embedVar = discord.Embed(description=message_content, color=0x27E8D1)
+    # await ctx.send(embed=embedVar)
 
     # Return type used when user presses a button. Returns an embedded variable based on the current command.
     #
     # await channel.send('>>> {}'.format(message_content))
+
+@client.command()
+async def test(ctx):
+    embedVar = discord.Embed(description="this is the desc", color=0x27E8D1)
+    await ctx.send(embed=embedVar, components=UIButton(label="Walk", custom_id='walk', style=discord.ButtonStyle.green, ctx=ctx))
 
 
 client.run(bot_token)
