@@ -12,10 +12,13 @@ class Monster:
         self.luck = luck
         self.choose_variant(variants)
 
-    def interaction(self):
+    def encounter(self):
         return "A {variant} {type} has appeared!".format(variant=self.variant, type=self.type)
 
     def stats(self):
+        # When a user deals more damage than the monster has HP, the HP will be reset to 0.
+        if self.hp < 0:
+            self.hp = 0
         return  "{variant} {type} \n\u2764\uFE0F : {hp} \n\N{crossed swords}: {attack} \n\N{shield}: {defense} \n".format(variant = self.variant,
                                                                                                                           type = self.type,
                                                                                             attack = self.attack,
