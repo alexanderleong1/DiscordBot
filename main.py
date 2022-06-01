@@ -122,11 +122,13 @@ then it will create a new character.
 @client.command()
 async def start(ctx):
     author = ctx.author
+    # If the user has not created a character before, create a new character and store in the database.
     if char_db.find_one({'_id': author.id}) is None:
         new_character = await create(ctx, False)
         await display_default_ui(ctx, new_character)
         return
 
+    # Resumes the player combat if they are left off in the middle of combat.
     if char_db.find_one({'_id': author.id})['in_combat']:
         await display_combat_ui(ctx, "Welcome back, " + str(author)[:-5] + "!" + '\n\n' + enemies[author.id].stats())
     else:
@@ -142,14 +144,71 @@ async def start(ctx):
 # async def test(ctx):
 #     await ctx.delete()
 
+"""Overriding class for stat allocation Button.
+
+The StatButton class overrides the callback method for Button. Used for Button interactions when allocating SP.
+"""
+class StatButton(Button):
+    def __init__(self, label, custom_id, style, ctx, row=0, disabled=False):
+        super().__init__(label=label, custom_id=custom_id, style=style, row=row, disabled=disabled)
+        self.ctx = ctx
+
+    async def callback(self, interaction):
+        id = self.ctx.author.id
+        character = char_db.find_one({'_id': id})
+        character_stats = character['stats']
+
+        # Disable leveling up stats during combat. If a user attempts to do so, ignore the response.
+        if character['in_combat']:
+            await interaction.response.defer()
+            await display_combat_ui(self.ctx, content="You can't level up skills while in combat!\n\n" +
+                                    enemies[id].stats())
+            return
+        # Increase HP by 5
+        if self.custom_id == 'hp':
+            await interaction.response.defer()
+            new_hp = character_stats['hp'] + 5
+            char_db.update_one({'_id': id},
+                               {'$set': {'stats.hp': new_hp}})
+            # Update the current HP so it is maxed.
+            char_db.update_one({'_id': id},
+                               {'$set': {'hp': new_hp}})
+        # Increase MP by 5
+        elif self.custom_id == 'mp':
+            await interaction.response.defer()
+            new_mp = character_stats['mp'] + 5
+            char_db.update_one({'_id': id},
+                               {'$set': {'stats.hp': new_mp}})
+            # Update the current MP so it is maxed.
+            char_db.update_one({'_id': id},
+                               {'$set': {'hp': new_mp}})
+        # Increase all other attributes by 1
+        else:
+            await interaction.response.defer()
+            new_stat = character_stats[self.custom_id] + 1
+            char_db.update_one({'_id': id},
+                               {'$set': {'stats.{}'.format(self.custom_id): new_stat}})
+        # Decrease the amount of SP by 1
+        char_db.update_one({'_id':id},
+                           {'$set': {'sp': (char_db.find_one({'_id':id})['sp'] - 1)}})
+        # Display the new stat page with a success message.
+        if len(self.custom_id) <= 2:
+            # Capitalize HP and MP.
+            updated_stat = self.custom_id.upper()
+        else:
+            # Capitalize only the first letter for other stats.
+            updated_stat = self.custom_id.capitalize()
+        str_rep = await stats(self.ctx, False) + '\n\n' + "Successfully allocated 1 SP to " + updated_stat + "!"
+        await display_default_ui(self.ctx, str_rep, self.custom_id)
+
 """Overriding class for Button.
 
 The UIButton class overrides the callback method for every instance. This allows the Button interaction
 to create a proper response.
 """
 class UIButton(Button):
-    def __init__(self, label, custom_id, style, ctx, row=0):
-        super().__init__(label=label, custom_id=custom_id, style=style, row=row)
+    def __init__(self, label, custom_id, style, ctx, row=0, disabled=False):
+        super().__init__(label=label, custom_id=custom_id, style=style, row=row, disabled=disabled)
         self.ctx = ctx
 
     async def callback(self, interaction):
@@ -210,6 +269,8 @@ class UIButton(Button):
             #await interaction.delete_original_message()
             str_rep = await flee(self.ctx, False)
             await display_default_ui(self.ctx, str_rep)
+        elif self.custom_id == 'sp':
+            await interaction.response.defer()
 
 
 """Displays the default UI.
@@ -238,8 +299,6 @@ async def display_default_ui(ctx, content="", custom_id=""):
     await initialize_buttons(view, [
         walk_button, stats_button, shop_button, inventory_button, location_button
     ],ctx,content,custom_id)
-
-    # await ctx.message.delete()
 
 
 """Displays the combat UI.
@@ -270,18 +329,19 @@ Args:
 async def initialize_buttons(view, button_list, ctx, content="", custom_id=""):
     # If there is an available Stat point and the user is on the Stat interface, display buttons to allocate Stat points.
     if char_db.find_one({'_id': ctx.author.id})['sp'] != 0 and custom_id == 'stats':
-        stat_list = [UIButton(label="HP", custom_id='hp', style=discord.ButtonStyle.blurple, ctx=ctx, row=0),
-                     UIButton(label="MP", custom_id='mp', style=discord.ButtonStyle.blurple, ctx=ctx, row=0),
-                     UIButton(label="Strength", custom_id='strength', style=discord.ButtonStyle.blurple, ctx=ctx, row=0),
-                     UIButton(label="Vitality", custom_id='vitality', style=discord.ButtonStyle.blurple, ctx=ctx, row=0),
-                     UIButton(label="Dexterity", custom_id='dexterity', style=discord.ButtonStyle.blurple, ctx=ctx, row=1),
-                     UIButton(label="Intelligence", custom_id='intelligence', style=discord.ButtonStyle.blurple, ctx=ctx, row=1),
-                     UIButton(label="Agility", custom_id='agility', style=discord.ButtonStyle.blurple, ctx=ctx, row=1),
-                     UIButton(label="Luck", custom_id='luck', style=discord.ButtonStyle.blurple, ctx=ctx, row=1)]
+        stat_list = [StatButton(label="{} SP".format(char_db.find_one({'_id':ctx.author.id})['sp']), custom_id='sp', style=discord.ButtonStyle.red, ctx=ctx, row=0),
+                     StatButton(label="HP", custom_id='hp', style=discord.ButtonStyle.blurple, ctx=ctx, row=0),
+                     StatButton(label="MP", custom_id='mp', style=discord.ButtonStyle.blurple, ctx=ctx, row=0),
+                     StatButton(label="STR", custom_id='strength', style=discord.ButtonStyle.blurple, ctx=ctx, row=1),
+                     StatButton(label="VIT", custom_id='vitality', style=discord.ButtonStyle.blurple, ctx=ctx, row=1),
+                     StatButton(label="DEX", custom_id='dexterity', style=discord.ButtonStyle.blurple, ctx=ctx, row=1),
+                     StatButton(label="INT", custom_id='intelligence', style=discord.ButtonStyle.blurple, ctx=ctx, row=2),
+                     StatButton(label="AGL", custom_id='agility', style=discord.ButtonStyle.blurple, ctx=ctx, row=2),
+                     StatButton(label="LUK", custom_id='luck', style=discord.ButtonStyle.blurple, ctx=ctx, row=2)]
         for button in stat_list:
             view.add_item(button)
         for button in button_list:
-            button.row = 2
+            button.row = 3
             view.add_item(button)
     else:
         for button in button_list:
@@ -698,31 +758,25 @@ async def create(ctx, is_sender=True):
 
 Accesses the stats Object from the character database. Called by the .stats keyword in the text channel.
 """
-
-
 @client.command()
 async def stats(ctx, is_sender=True):
     author = ctx.author
     char_info = char_db.find_one({'_id': author.id})
     char_stats = char_info['stats']
+    stats = "__**Displaying {}'s stats:**__ \nLevel {} ({} EXP / {} EXP) \n\u2764\uFE0F HP:  {} / {}\n\U0001F535 MP: {} / {} \n\N{flexed biceps} STR:  {} \n\N{adhesive bandage} VIT:   {}\n\U0001F3AF DEX: {} \n\N{scroll} INT:   {} \n\U0001F45F AGL: {}\n\N{sparkles} LUK:  {}" \
+        .format(author, char_stats['level'], char_db.find_one({'_id': author.id})['exp'],
+                char_db.find_one({'_id': author.id})['max_exp'],
+                char_info['hp'], char_stats['hp'], char_info['mp'], char_stats['mp'],
+                char_stats['strength'],
+                char_stats['vitality'], char_stats['dexterity'], char_stats['intelligence'],
+                char_stats['agility'],
+                char_stats['luck'])
+    if char_info['sp'] != 0:
+        stats += '\n\n' + "You have {sp} SP available to allocate!".format(sp=char_info['sp'])
     if is_sender:
-        await send_message(ctx, "__**Displaying {}'s stats:**__ \nLevel {} ({} EXP / {} EXP) \n\u2764\uFE0F HP:  {} / {}\n\U0001F535 MP: {} / {} \n\N{flexed biceps} STR:  {} \n\N{adhesive bandage} VIT:   {}\n\U0001F3AF DEX: {} \n\N{scroll} INT:   {} \n\U0001F45F AGL: {}\n\N{sparkles} LUK:  {}"
-                       .format(author, char_stats['level'], char_db.find_one({'_id': author.id})['exp'],
-                               char_db.find_one({'_id': author.id})['max_exp'],
-                               char_info['hp'], char_stats['hp'], char_info['mp'], char_stats['mp'],
-                               char_stats['strength'],
-                               char_stats['vitality'], char_stats['dexterity'], char_stats['intelligence'],
-                               char_stats['agility'],
-                               char_stats['luck']))
+        await send_message(ctx, stats)
     else:
-        return "__**Displaying {}'s stats:**__ \nLevel {} ({} EXP / {} EXP) \n\u2764\uFE0F HP:  {} / {}\n\U0001F535 MP: {} / {} \n\N{flexed biceps} STR:  {} \n\N{adhesive bandage} VIT:   {}\n\U0001F3AF DEX: {} \n\N{scroll} INT:   {} \n\U0001F45F AGL: {}\n\N{sparkles} LUK:  {}"\
-            .format(author, char_stats['level'], char_db.find_one({'_id': author.id})['exp'],
-                               char_db.find_one({'_id': author.id})['max_exp'],
-                               char_info['hp'], char_stats['hp'], char_info['mp'], char_stats['mp'],
-                               char_stats['strength'],
-                               char_stats['vitality'], char_stats['dexterity'], char_stats['intelligence'],
-                               char_stats['agility'],
-                               char_stats['luck'])
+        return stats
 
 
 # """Sends a text representation of the stats with verbal descriptions rather than emoticons.
@@ -805,9 +859,6 @@ Changes the embedded message to display the updated content based on the user bu
 async def update_ui(ctx, message_content):
     embedVar = discord.Embed(description=message_content)
     await ctx.edit_message(embed=embedVar)
-
-
-
 
     # Return type used when user presses a button. Returns an embedded variable based on the current command.
     #
