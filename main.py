@@ -135,18 +135,10 @@ async def start(ctx):
         await display_default_ui(ctx)
 
 
-# class View(discord.ui.View):
-#     @discord.ui.button(label="click me!", style=discord.ButtonStyle.green)
-#     async def button_callback(self, button, interaction):
-#         await interaction.response.send_message("clicked")
-#
-# @client.command()
-# async def test(ctx):
-#     await ctx.delete()
-
 """Overriding class for stat allocation Button.
 
 The StatButton class overrides the callback method for Button. Used for Button interactions when allocating SP.
+Separate class allows for better modularity between UI buttons and stat allocation buttons.
 """
 class StatButton(Button):
     def __init__(self, label, custom_id, style, ctx, row=0, disabled=False):
@@ -154,6 +146,8 @@ class StatButton(Button):
         self.ctx = ctx
 
     async def callback(self, interaction):
+
+
         id = self.ctx.author.id
         character = char_db.find_one({'_id': id})
         character_stats = character['stats']
@@ -163,6 +157,10 @@ class StatButton(Button):
             await interaction.response.defer()
             await display_combat_ui(self.ctx, content="You can't level up skills while in combat!\n\n" +
                                     enemies[id].stats())
+            return
+        if character['sp'] <= 0:
+            await interaction.response.defer()
+            await display_default_ui(self.ctx, content= await stats(self.ctx, False) + "\n\nYou don't have any SP available!")
             return
         # Increase HP by 5
         if self.custom_id == 'hp':
@@ -178,10 +176,10 @@ class StatButton(Button):
             await interaction.response.defer()
             new_mp = character_stats['mp'] + 5
             char_db.update_one({'_id': id},
-                               {'$set': {'stats.hp': new_mp}})
+                               {'$set': {'stats.mp': new_mp}})
             # Update the current MP so it is maxed.
             char_db.update_one({'_id': id},
-                               {'$set': {'hp': new_mp}})
+                               {'$set': {'mp': new_mp}})
         # Increase all other attributes by 1
         else:
             await interaction.response.defer()
@@ -212,6 +210,9 @@ class UIButton(Button):
         self.ctx = ctx
 
     async def callback(self, interaction):
+        # print(interaction.user.id)
+        # print(interaction.user)
+
         # Removes all the buttons from the previous user interaction.
         # self.view.clear_items()
         if self.custom_id == 'walk':
@@ -503,7 +504,7 @@ async def attack(ctx, is_sender=True):
         damage_dealt = int((1.5 + char_dex / 100) * (random.randint(int(char_str), int(char_str * 1.1))))
         enemies[author.id].take_damage(damage_dealt)
         enemy_hp_left = enemies[author.id].get_hp() if enemies[author.id].get_hp() >= 0 else 0
-        str_rep = "\U0001F4A5You landed a critical strike for {} damage!\U0001F4A5".format(
+        str_rep = "\U0001F4A5You landed a critical strike for **{} damage**\U0001F4A5".format(
                                damage_dealt) + '\n\n' + enemies[author.id].stats()
         if is_sender:
             await send_message(ctx, str_rep)
@@ -519,8 +520,8 @@ async def attack(ctx, is_sender=True):
         damage_dealt = random.randint(int(char_str), int(char_str * 1.1))
         enemies[author.id].take_damage(damage_dealt)
         enemy_hp_left = enemies[author.id].get_hp() if enemies[author.id].get_hp() >= 0 else 0
-        str_rep = "\N{crossed swords}You attacked the {} for {} damage.\N{crossed swords}".format(
-                            enemies[author.id], damage_dealt) + '\n\n' + enemies[author.id].stats()
+        str_rep = "\N{crossed swords}You attacked for **{} damage**\N{crossed swords}".format(
+                            damage_dealt) + '\n\n' + enemies[author.id].stats()
         if is_sender:
             await send_message(ctx, str_rep)
             if enemy_hp_left <= 0:
@@ -634,9 +635,10 @@ async def level_up(ctx, amount, enemy=None):
         new_level = character['stats']['level'] + 1
         new_max_hp = character['stats']['hp'] + 1
 
+        # Update current EXP, max EXP, level, HP, and MP.
         char_db.update_one({'_id': author.id},
                            {'$set': {'exp': new_curr_exp, 'max_exp': new_max_exp, 'stats.level': new_level,
-                                     'stats.hp': new_max_hp, 'hp': new_max_hp}})
+                                     'stats.hp': new_max_hp, 'hp': new_max_hp, 'mp': char_db.find_one({'_id':author.id})['stats']['mp']}})
 
     # Increase the amount of SP by 1 for every level.
     updated_sp = char_db.find_one({'_id': author.id})['sp'] + 1
@@ -736,8 +738,6 @@ async def spawn(ctx, is_sender=True):
 Only called when a new user is playing for the first time. Creates an instance of the Character class and initializes
 all of the default values using a pre-defined template. Will send a message indicating the success of this operation.
 """
-
-
 async def create(ctx, is_sender=True):
     author = ctx.author
     if char_db.find_one({'_id': author.id}) is None:
