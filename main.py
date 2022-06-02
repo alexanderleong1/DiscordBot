@@ -197,6 +197,18 @@ class StatButton(Button):
         str_rep = await stats(self.ctx, False) + '\n\n' + "Successfully allocated 1 SP to " + updated_stat + "!"
         await display_default_ui(self.ctx, str_rep, self.custom_id)
 
+"""Overriding class for View.
+
+Overrides the interaction check to block other users from clicking the author's buttons.
+"""
+class BotView(View):
+    def __init__(self, author):
+        self.author = author
+        super().__init__()
+
+    async def interaction_check(self, interaction):
+        return interaction.user == self.author
+
 """Overriding class for Button.
 
 The UIButton class overrides the callback method for every instance. This allows the Button interaction
@@ -208,6 +220,8 @@ class UIButton(Button):
         self.ctx = ctx
 
     async def callback(self, interaction):
+        # while interaction.user != self.ctx.author:
+        #     pass
         # print(interaction.user.id)
         # print(interaction.user)
 
@@ -277,7 +291,7 @@ class UIButton(Button):
 Choices for walking, opening shop, checking inventory, changing locations
 """
 async def display_default_ui(ctx, content="", custom_id=""):
-    view = View()
+    view = BotView(ctx.author)
 
     walk_button = UIButton(label="Walk", custom_id='walk', style=discord.ButtonStyle.green, ctx=ctx)
 
@@ -288,12 +302,9 @@ async def display_default_ui(ctx, content="", custom_id=""):
         stats_button_style = discord.ButtonStyle.green
 
     stats_button = UIButton(label="Stats", custom_id='stats', style=stats_button_style, ctx=ctx)
-
-    shop_button = UIButton(label="Inventory", custom_id='inventory', style=discord.ButtonStyle.blurple, ctx=ctx,
-                           )
+    shop_button = UIButton(label="Inventory", custom_id='inventory', style=discord.ButtonStyle.blurple, ctx=ctx)
     inventory_button = UIButton(label="Shop", custom_id='shop', style=discord.ButtonStyle.blurple, ctx=ctx)
-    location_button = UIButton(label="Move Locations", custom_id='location', style=discord.ButtonStyle.blurple, ctx=ctx,
-                               )
+    location_button = UIButton(label="Move Locations", custom_id='location', style=discord.ButtonStyle.blurple, ctx=ctx)
 
     await initialize_buttons(view, [
         walk_button, stats_button, shop_button, inventory_button, location_button
@@ -305,13 +316,11 @@ async def display_default_ui(ctx, content="", custom_id=""):
 Includes choices for attack, special attack, inventory, and flee.
 """
 async def display_combat_ui(ctx, content="", custom_id=""):
-    view = View()
+    view = BotView(ctx.author)
 
     attack_button = UIButton(label="Attack", custom_id='attack', style=discord.ButtonStyle.green, ctx=ctx)
-    s_attack_button = UIButton(label="Special Attack", custom_id='s_attack', style=discord.ButtonStyle.blurple, ctx=ctx,
-                              )
-    inventory_button = UIButton(label="Inventory", custom_id='inventory', style=discord.ButtonStyle.blurple, ctx=ctx,
-                                )
+    s_attack_button = UIButton(label="Special Attack", custom_id='s_attack', style=discord.ButtonStyle.blurple, ctx=ctx)
+    inventory_button = UIButton(label="Inventory", custom_id='inventory', style=discord.ButtonStyle.blurple, ctx=ctx)
     flee_button = UIButton(label="Flee", custom_id='flee', style=discord.ButtonStyle.red, ctx=ctx)
 
     await initialize_buttons(view, [
@@ -345,7 +354,6 @@ async def initialize_buttons(view, button_list, ctx, content="", custom_id=""):
     else:
         for button in button_list:
             view.add_item(button)
-    
 
     if content == "":
         await ctx.send(embed=discord.Embed(description="Welcome back, " + str(ctx.author)[:-5] + "!", color=0x27E8D1), view=view)
@@ -677,7 +685,6 @@ async def level_up(ctx, amount, enemy=None):
                                                                           'max_exp']) + '\n\n' + "Leveled up to {}! Max HP increased to {}. Earned **1 SP**.".format(character['stats']['level'],
                                                                                                                                                     char_db.find_one({'_id': author.id})[
                                                                                                                                                         'stats']['hp'])
-
 """Displays a menu for the user to assign skill points.
 
 Shows the user the number of available skill points to be allocated. 
@@ -692,8 +699,6 @@ async def sp(ctx):
 Args:
     amount (int): the amount of gold to add
 """
-
-
 @client.command()
 async def add_gold(ctx, amount):
     author = ctx.author
