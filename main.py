@@ -146,8 +146,6 @@ class StatButton(Button):
         self.ctx = ctx
 
     async def callback(self, interaction):
-
-
         id = self.ctx.author.id
         character = char_db.find_one({'_id': id})
         character_stats = character['stats']
@@ -217,7 +215,7 @@ class UIButton(Button):
         # self.view.clear_items()
         if self.custom_id == 'walk':
             await interaction.response.defer()
-            #await interaction.delete_original_message()
+            # await interaction.delete_original_message()
             # await interaction.response.edit_message(embed=discord.Embed(description="You walk forward...",
             #                                                           ), view=self.view)
             walk_res = await walk(self.ctx, False)
@@ -457,11 +455,21 @@ async def walk(ctx, is_sender=True):
         # Update the in_combat status of the user.
         char_db.update_one({'_id': author.id},
                            {'$set': {'in_combat': True}})
-        return ("combat", await spawn(ctx, False))
+        if is_sender:
+            await send_message(ctx, await spawn(ctx, False))
+        else:
+            return ("combat", await spawn(ctx, False))
         # Send a picture of the monster
         # with open('Capture.png', 'rb') as fp:
         #   await channel.send(file=discord.File(fp, 'Capture.png'))
 
+"""Aliasing for the walk command.
+
+Allows for easier access when using text commands.
+"""
+@client.command()
+async def w(ctx):
+    await walk(ctx)
 
 """Called when the user attacks an opponent.
 
@@ -532,6 +540,14 @@ async def attack(ctx, is_sender=True):
             finally:
                 if enemy_hp_left <= 0:
                     return str_rep + '\n' + await despawn(ctx)
+
+"""Aliasing for attack command.
+
+Allows for easier attack when using text commands.
+"""
+@client.command()
+async def a(ctx):
+    await attack(ctx)
 
 """Allows the player to flee from combat
 """
@@ -703,6 +719,13 @@ async def inventory(ctx, is_sender=True):
         return "__**{}'s inventory**__\n\nGold: {}\nEquipment: {}\nFood: {}"\
             .format(author, char_inv['gold'], char_inv['equipment'], char_inv['food'])
 
+"""Alias for inventory command.
+
+Makes text-line easier to access.
+"""
+@client.command()
+async def inv(ctx):
+    await inventory(ctx)
 
 """Spawns a Monster during a combat encounter.
 
